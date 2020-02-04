@@ -1,0 +1,28 @@
+CHIP Mux {
+    IN a, b, sel;
+    OUT out;
+
+    PARTS:
+        // Term 1
+        Not(in=a, out=notA);
+        And(a=notA, b=b, out=notAandB);
+        And(a=notAandB, b=sel, out=canonical0);
+
+        // Term 2
+        Not(in=b, out=notB);
+        Not(in=sel, out=notSel);
+        And(a=a, b=notB, out=aAndNotB);
+        And(a=aAndNotB, b=notSel, out=canonical1);
+
+        // Term 3
+        And(a=a, b=b, out=aAndB);
+        And(a=aAndB, b=notSel, out=canonical2);
+
+        // Term 4
+        And(a=aAndB, b=sel, out=canonical3);
+
+        // Combination
+        Or(a=canonical0, b=canonical1, out=can0And1);
+        Or(a=canonical2, b=canonical3, out=can2And3);
+        Or(a=can0And1, b=can2And3, out=out);
+}
