@@ -1,0 +1,184 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+/* (1) If we receive an A-Instruction, send its value to the A-Register.
+ *     Otherwise, the instruction is an I-Instruction, and we send
+ *     the Output of the ALU to the A-Register
+ *     
+ * (2) When to actually load a new value into the A register?
+ *     - when we have received an A instruction
+ *     - when we have received A C-Instruction with the destination bit for A set
+ *
+ * (3) When to actually load a new value into the D register?
+ *     - when we have received a C-Instruction with the destination bit for D set
+ *
+ * (4) Here, we chose which Y value to load into our CPU.
+ *     - if we have received an A instruction, load its value into the CPU's x input
+ *     - if we received a C instruction with the a bit (instruction[12]) set, we 
+ *       use the value from memory (inM)
+ * 
+ * (5) The CPU has 7 flags to decide what to compute. These are directly encoded
+ *     in an I-Instructoin instruction[6..11]
+ *
+ * (6) These flags are used for jumping -> (8)
+ *
+ * (7) We write to M if we received a C instruction with the M destination bit set.
+ *     The M destination bit is instruction[3]
+ *
+ * (8) When do we load the PC with the address from A?
+        j3 = instruction[0], j2 = instruction[1], j1 = instruction[0]
+ *     - 
+ *     -
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+        // Did we receive an A-Instruction?
+        Not(in=instruction[15], out=isAInstruction);
+
+        // If isAInstruction, send instruction to A Register, otherwise, send
+        // previous ALU output.
+        Mux16(a=aluOutput, b=instruction, sel=isAInstruction, out=toARegister);
+
+        // Did we receive a C-Instruction with destination bit for A set?
+        And(a=instruction[15], b=instruction[5], out=AdestinationBitSet);
+
+        // Do we need to load the A register with a new value?
+        Or(a=isAInstruction, b=AdestinationBitSet, out=loadARegister);
+
+        ARegister(in=toARegister, load=loadARegister, out=fromARegister ,out[0..14]=addressM);
+
+        // If we received an A-Instruction, load the value from the A register.
+        // Otherwise, load the value out of memory (from input inM)
+        // instruction[12] toggles wether to use value of A register or inM. 
+        Not(in=instruction[12], out=useARegisterInComputation);
+        Or(a=isAInstruction, b=useARegisterInComputation, out=useARegisterValue);
+        Mux16(a=inM, b=fromARegister, sel=useARegisterValue, out=valueY);
+
+        // The D-Register receives its input from the alu output.
+        // It is only set when both of these are set:
+        // - The instruction is an I innstruction
+        // - The second destination bit (d2), instruction[4], is set.
+        // Its output is the second alu input
+        And(a=instruction[15], b=instruction[4], out=setDRegister);
+        DRegister(in=aluOutput, load=setDRegister, out=valueX);
+
+        // THE ALU
+        // takes two inputs, valueX and valueY
+        // has one output, aluOutput, which is also fanned to outM
+
+        // Instruction Decoding (so we can set the instruction bits)
+        // instruction bits are stored in instruction[6..11]
+
+        // Instruction Bits debug
+        Or(a=false, b=instruction[6], out=c6);
+        Or(a=false, b=instruction[7], out=c5);
+        Or(a=false, b=instruction[8], out=c4);
+        Or(a=false, b=instruction[9], out=c3);
+        Or(a=false, b=instruction[10], out=c2);
+        Or(a=false, b=instruction[11], out=c1);
+        Or(a=false, b=instruction[12], out=a);
+
+        ALU(x=valueX, y=valueY, zx=instruction[11], nx=instruction[10], zy=instruction[9],
+            ny=instruction[8], f=instruction[7], no=instruction[6], out=aluOutput, out=outM,
+            zr=resultZero, ng=resultNeg);
+
+
+        // Deciding wether to write to memory
+        And(a=instruction[15], b=instruction[3], out=writeM);
+
+        // Program Counter
+
+        // j3 = instruction[2], j2 = instruction[1], j1 = instruction[0]
+        // JGT jump when result was greater 0
+        Not(in=resultNeg, out=resultNotNeg);
+        And(a=resultNotNeg, b=resultNotZero, out=resultGreaterZero);
+        And(a=instruction[0], b=resultGreaterZero, out=JGT);
+
+        // JEQ jum when result was 0
+        And(a=instruction[1], b=resultZero, out=JEQ);
+
+        // JGE jump when result was >= 0
+        Or(a=resultNotNeg, b=resultZero, out=resultNotNegative);
+        And(a=instruction[1], b=instruction[0], out=tryJGE);
+        And(a=resultNotNegative, b=tryJGE, out=JGE);
+
+        // JLT jump when result < 0
+        And(a=instruction[2], b=resultNeg, out=JLT);
+
+        // JNE jump if result != 0
+        Not(in=resultZero, out=resultNotZero);
+        And(a=instruction[0], b=instruction[2], out=instructionJNE);
+        And(a=instructionJNE, b=resultNotZero, out=JNE);
+
+        // JLE jump if result <= 0
+        And(a=resultZero, b=resultGreaterZero, out=JLE);
+
+        // Unconditional Jump
+        And(a=instruction[0], b=instruction[1], out=instructionUncond1);
+        And(a=instructionUncond1, b=instruction[2], out=JMP);
+
+        // Load PC when...
+        Or(a=JGT, b=JEQ, out=jumps1);
+        Or(a=jumps1, b=JLT, out=jumps2);
+        Or(a=jumps2, b=JNE, out=jumps3);
+        Or(a=jumps3, b=JLE, out=jumps4);
+        Or(a=jumps4, b=JMP, out=jumps5);
+        Or(a=jumps5, b=JGE, out=jumpConditionFulfilled);
+
+        // If the PC is not loaded, it is increased
+        // ... also only load it if instruction was I-Instruction.
+        And(a=jumpConditionFulfilled, b=instruction[15], out=loadPC);
+        /*
+        Not(in=incPC, out=notIncPC);
+        And(a=notIncPC, b=hasJump, out=loadPC);
+        /*
+
+        // Increment if all jump bits are negative
+        /*
+        Not(in=instruction[0], out=notJump0);
+        Not(in=instruction[1], out=notJump1);
+        Not(in=instruction[2], out=notJump2);
+        And(a=notJump0, b=notJump1, out=noJump);
+        And(a=noJump, b=notJump2, out=incPC);
+        */
+
+        // LoadPC
+        PC(in=fromARegister, load=loadPC, inc=true, reset=reset, out[0..14]=pc);
+}
