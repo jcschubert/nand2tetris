@@ -1,0 +1,80 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/03/a/PC.hdl
+
+/**
+ * A 16-bit counter with load and reset control bits.
+ * if      (reset[t] == 1) out[t+1] = 0
+ * else if (load[t] == 1)  out[t+1] = in[t]
+ * else if (inc[t] == 1)   out[t+1] = out[t] + 1  (integer addition)
+ * else                    out[t+1] = out[t]
+ */
+
+CHIP PC {
+    IN in[16],load,inc,reset;
+    OUT out[16];
+
+    PARTS:
+
+        // Hm, we need a register to save the count
+        Register(in=toRegister, load=anyEditPinSet, out=regOut, out=out);
+
+        Or(a=load, b=reset, out=resetOrLoad);
+        Or(a=resetOrLoad, b=inc, out=anyEditPinSet);
+
+        // We also need an incrementer chip.
+
+        // Ok, on to the logic. First, we'll deal with the
+        // reset bit. Smells like we need to choose from two
+        // inputs based on one bit. Mux, anyone? Well, a Mux16,
+        // to be precise.
+        Mux16(a=regOut, b=false, sel=reset, out=resetResult);
+
+        // Hm, the load pin of the register can't just depend on load.
+        // It needs to be 1 whenever we need to write, so when either
+        // load, inc or reset is 1.
+        Not(in=reset, out=notReset);
+        And(a=notReset, b=load, out=notResetAndLoad);
+        //Or(a=resetOrLoad, b=inc, out=needWrite);
+
+        // Ok, now we can test the resetting, and it works!
+
+        // Now, the mux for load
+        Mux16(a=resetResult, b=in, sel=notResetAndLoad, out=loadResult);
+        // The incrementer takes the current value of the register
+        // (regout) and offers it as 'incOut'
+        Inc16(in=regOut, out=incOut);
+
+        // Ok, one mre condition for the selector
+        Not(in=load, out=notLoad);
+        And(a=notReset, b=notLoad, out=notResetAndNotLoad);
+        And(a=notResetAndNotLoad, b=inc, out=notResetAndNotLoadAndInc);
+
+        // Now, we need another Mux16 that selects between 
+        // ~~resetResult~~ (no, loadResult) and incOut based on the inc flag
+        Mux16(a=loadResult, b=incOut, sel=notResetAndNotLoadAndInc, out=toRegister);
+
+        // (Then, of course, the register needs to take incResult as the input)
+
+        // Ah, we also need to implement the load bit! So, another Mux16,
+        // taking in the 'resetResult' and 'in', and 'load' as the selector.
+        // the reset Mux16 takes the out from the register instead, regOut.
+        //Mux16(a=resetResult, b=in, sel=load, out=loadResult);
+
+        // Perhaps I should use Mux4Way16 instead of those Ors.
+        //Mux4Way16(a=false, b=in, c=incOut, d=regOut,
+                  //sel[0]=loadOrReset, sel[1]=incOrReset, out=toRegister);
+
+        // For the sel[2] we need two or gates:
+        // 00 = do nothing
+        // 01 = load
+        // 10 = inc
+        // 11 = reset
+        //Or(a=load, b=reset, out=loadOrReset);
+        //Or(a=inc, b=reset, out=incOrReset);
+
+        // And a load Bit
+        //Or(a=loadOrReset, b=inc, out=loadOut);
+
+}
