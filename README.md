@@ -1,2 +1,2 @@
 # nand2tetris
-Sourcecode and Notes for [https://www.nand2tetris.org/](Nand2Tetris).
+Sourcecode and Notes for [Nand2Tetris](https://www.nand2tetris.org/).
