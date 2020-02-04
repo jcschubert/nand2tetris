@@ -1,0 +1,41 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/02/Inc16.hdl
+
+/**
+ * 16-bit incrementer:
+ * out = in + 1 (arithmetic addition)
+ */
+
+ // how to flip a bit: Not
+ // "stop" !in[prev]
+
+
+CHIP Inc16 {
+    IN in[16];
+    OUT out[16];
+
+    PARTS:
+        // Implementation 1
+        // Add16(a=in, b[0]=true, b[1..15]=false, out=out);
+
+        // Implementation 2
+        // more efficient
+        HalfAdder(a=in[0], b=true, sum=out[0], carry=flipped1);
+        HalfAdder(a=in[1], b=flipped1, sum=out[1], carry=flipped2);
+        HalfAdder(a=in[2], b=flipped2, sum=out[2], carry=flipped3);
+        HalfAdder(a=in[3], b=flipped3, sum=out[3], carry=flipped4);
+        HalfAdder(a=in[4], b=flipped4, sum=out[4], carry=flipped5);
+        HalfAdder(a=in[5], b=flipped5, sum=out[5], carry=flipped6);
+        HalfAdder(a=in[6], b=flipped6, sum=out[6], carry=flipped7);
+        HalfAdder(a=in[7], b=flipped7, sum=out[7], carry=flipped8);
+        HalfAdder(a=in[8], b=flipped8, sum=out[8], carry=flipped9);
+        HalfAdder(a=in[9], b=flipped9, sum=out[9], carry=flipped10);
+        HalfAdder(a=in[10], b=flipped10, sum=out[10], carry=flipped11);
+        HalfAdder(a=in[11], b=flipped11, sum=out[11], carry=flipped12);
+        HalfAdder(a=in[12], b=flipped12, sum=out[12], carry=flipped13);
+        HalfAdder(a=in[13], b=flipped13, sum=out[13], carry=flipped14);
+        HalfAdder(a=in[14], b=flipped14, sum=out[14], carry=flipped15);
+        HalfAdder(a=in[15], b=flipped15, sum=out[15], carry=flipped16);
+}
